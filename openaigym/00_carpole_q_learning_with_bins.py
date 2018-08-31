@@ -3,17 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from gym import wrappers
 
-def build_state(features):
-    """
-    convert [1,2,3] to 123
-    """
-    return int("".join([str(feature) for feature in features]))
 
-def to_bin(value, bins):
-    return np.digitize([value], bins)[0]
 
-def to_bins(values, bins):
-    return np.digitize(values, bins)
 
 
 class FeatureTransformer:
@@ -28,12 +19,24 @@ class FeatureTransformer:
     def transform(self, observation):
         #transform the observation to state
         cart_p, cart_v, pole_a, pole_v = observation
-        return build_state([
-                to_bin(cart_p, self._cart_position_bins),
-                to_bin(cart_v, self._cart_velocity_bins),
-                to_bin(pole_a, self._pole_angle_bins),
-                to_bin(pole_v, self._pole_velocity_bins)]
+        return self.build_state([
+                self._to_bin(cart_p, self._cart_position_bins),
+                self._to_bin(cart_v, self._cart_velocity_bins),
+                self._to_bin(pole_a, self._pole_angle_bins),
+                self._to_bin(pole_v, self._pole_velocity_bins)]
                 )
+        
+    def _to_bin(self, value, bins):
+        return np.digitize([value], bins)[0]
+
+    def _to_bins(self, values, bins):
+        return np.digitize(values, bins)
+    
+    def build_state(self, features):
+        """
+        convert [1,2,3] to 123
+        """
+        return int("".join([str(feature) for feature in features]))
         
 
 class Model:
@@ -94,6 +97,8 @@ def plot_running_avg(total_rewards):
     plt.plot(running_average)
     plt.title("Aveage score")
     plt.show()
+    
+    
         
 if __name__ == '__main__':
     env = gym.make('CartPole-v0')
