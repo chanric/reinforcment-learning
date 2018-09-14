@@ -10,3 +10,8 @@ def plot_running_avg(total_rewards):
     plt.plot(running_average)
     plt.title("Aveage score")
     plt.show()
+
+def plot_x(x, title='X'):
+    plt.title(title)
+    plt.plot(x)
+    plt.show()
