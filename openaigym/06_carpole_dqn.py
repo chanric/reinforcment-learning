@@ -82,17 +82,18 @@ class DeepQNetwork:
     def set_session(self, session):
         self._session = session
         
-    def copy_from(self, other):
-        ops = []
-        my_params = [t for t in tf.trainable_variables() if t.name.startswith(self.scope)]
-        my_params = sorted(my_params, key=lambda v: v.name)
-        other_params = [t for t in tf.trainable_variables() if t.name.startswith(other.scope)]
-        other_params = sorted(other_params, key=lambda v: v.name)
-        for m, o in zip(my_params, other_params):
-            actual = self._session.run(o)
-            op = m.assign(actual)
-            ops.append(op)
-        self._session.run(ops)
+    
+    def load_from(self):
+        #rather than do a liv copy. we can presetup the copy
+        self._session.run(self._copy_from_ops)
+    
+    def setup_copy_from(self, other):
+        copy_ops = []
+        for m, o in zip(self.params, other.params):
+            op = m.assign(o)
+            copy_ops.append(op)
+        self._copy_from_ops = copy_ops
+        
         
     def predict(self, X):
         X = np.atleast_2d(X)
@@ -110,8 +111,7 @@ class DeepQNetwork:
         next_states = [self._exp[i]['s_next'] for i in indexes]
         dones = [self._exp[i]['d'] for i in indexes]
         next_Q = np.max(target_network.predict(next_states), axis=1)
-        targets = [r + self._gamma*next_q 
-                   if not done else r 
+        targets = [r + self._gamma*next_q if not done else r 
                    for r, next_q, done in zip(rewards, next_Q, dones)]
         
         self._session.run(
@@ -149,17 +149,16 @@ def play_one(env, model, train_model, eps, copy_period):
         observation, reward, done, _ = env.step(action)
         
         total_reward += reward
-        if not done and i<200:
+        if done and i<200:
             reward = -200
                     
         
         model.add_experience(prev_o, action, reward, observation, done)
         model.train(train_model)
         
-        if i != 0 and i % copy_period == 0:
-            print("copy time")
-            train_model.copy_from(model)
-            print("done copy time")
+        if i % copy_period == 0:
+            #train_model.copy_from(model)
+            train_model.load_from();
         i += 1
 
 
@@ -173,30 +172,27 @@ def main():
     
     input_dim = len(env.observation_space.sample())
     output_dim = env.action_space.n
-    h_sizes = [200,200]
+    h_sizes = [150,150]
     model = DeepQNetwork(input_dim, output_dim, h_sizes, gamma, "model")
     train_model = DeepQNetwork(input_dim, output_dim, h_sizes, gamma, "training_model")
+    train_model.setup_copy_from(model)
     init = tf.global_variables_initializer()
+    
+    
+    
     session = tf.InteractiveSession()
     session.run(init)
     model.set_session(session)
     train_model.set_session(session)
     
     
-    next_copy_period = 50
     N=500
     total_rewards = np.empty(N)
     for i in range(N):
         eps = 1.0/np.sqrt(i+1)
-        total_reward = play_one(env, model, train_model, eps, next_copy_period)
+        total_reward = play_one(env, model, train_model, eps, copy_period)
         total_rewards[i] = total_reward
-        if total_reward > 50:
-            next_copy_period = 50
-        if total_reward > 30:
-            next_copy_period= 25
-        else:
-            next_copy_period = 10
-        if i % 10 ==0:
+        if i % 25 ==0:
             last_100_r = total_rewards[max(0,i-100):i].mean()
             print("episode number: %s, last_100_reward_avg: %s, last play %s" 
                   %( i, last_100_r, total_reward))
